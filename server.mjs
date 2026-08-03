@@ -11,7 +11,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PORT = Number(process.env.PORT) || 3017;
+const PORT = Number(process.env.PORT) || 3023;
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), 'dist');
 
 const MIME = {
