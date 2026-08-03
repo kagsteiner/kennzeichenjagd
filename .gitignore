@@ -2,3 +2,7 @@ node_modules/
 dist/
 .DS_Store
 *.local
+
+# Lokale Kopie der VPS-nginx-Konfiguration — enthält interne Portbelegung
+# anderer Apps, gehört nicht ins öffentliche Repo.
+srv706843.hstgr.cloud
