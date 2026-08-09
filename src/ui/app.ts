@@ -2,7 +2,7 @@
 
 import { store, tripPoints } from '../game/store';
 import { PLATES } from '../game/plates';
-import { formatClock, formatDuration, h } from './dom';
+import { formatBuildTime, formatClock, formatDuration, h } from './dom';
 import { DriveScreen } from './drive';
 import { createCollectionScreen } from './collection';
 import { openSettings } from './settings';
@@ -82,6 +82,7 @@ function createStartScreen({ onDrive, onCollection }: StartOptions): Screen {
         h('button', { class: 'link', onclick: () => openSettings(root) }, 'Einstellungen'),
       ),
       h('p', { class: 'fineprint' }, 'Für Beifahrer und Mitfahrende. Nicht für die Person am Steuer.'),
+      h('p', { class: 'build-info' }, `Build vom ${formatBuildTime()}`),
     ),
   );
 

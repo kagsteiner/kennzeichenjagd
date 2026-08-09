@@ -49,3 +49,15 @@ export function formatDuration(ms: number): string {
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/** "03.08.2026, 20:18" — __BUILD_TIME__ wird von Vite beim Build eingesetzt, siehe vite.config.ts. */
+export function formatBuildTime(): string {
+  return new Date(__BUILD_TIME__).toLocaleString('de-DE', {
+    timeZone: 'Europe/Berlin',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
