@@ -6,6 +6,7 @@ import { formatBuildTime, formatClock, formatDuration, h } from './dom';
 import { DriveScreen } from './drive';
 import { createCollectionScreen } from './collection';
 import { openSettings } from './settings';
+import titleSrc from '../assets/title.png';
 
 type Screen = { root: HTMLElement; destroy?: () => void };
 
@@ -68,7 +69,7 @@ function createStartScreen({ onDrive, onCollection }: StartOptions): Screen {
     h(
       'div',
       { class: 'start-inner' },
-      h('h1', { class: 'logo' }, 'Kennzeichen', h('span', {}, 'jagd')),
+      h('img', { class: 'logo-img', src: titleSrc, alt: 'Kennzeichenjagd' }),
       h(
         'p',
         { class: 'lead' },
