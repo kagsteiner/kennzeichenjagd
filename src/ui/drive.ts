@@ -19,9 +19,9 @@ import { openSettings } from './settings';
 
 const HINT_LIMIT = 60;
 
-/** Fund-Moment: 0,5 s herauszoomen, 1 s Standbild, 0,5 s zurück. */
+/** Fund-Moment: 0,5 s herauszoomen, 2 s Standbild, 0,5 s zurück. */
 const ZOOM_MS = 500;
-const HOLD_MS = 1000;
+const HOLD_MS = 2000;
 
 export class DriveScreen {
   readonly root: HTMLElement;
@@ -263,8 +263,8 @@ export class DriveScreen {
       { class: `find-card tier-${findTier(find.km)}` },
       find.firstEver ? h('div', { class: 'find-new' }, 'Neu entdeckt!') : null,
       h('div', { class: 'find-code' }, plate.code),
-      h('div', { class: 'find-city' }, plate.city),
       h('div', { class: 'find-mnemonic' }, plate.mnemonic),
+      h('div', { class: 'find-city' }, plate.city),
       h('div', { class: 'find-distance' }, `${formatKm(find.km)} ${compass(from, plate)}`.trim()),
       h('div', { class: 'find-points' }, `+${find.points}`),
     );

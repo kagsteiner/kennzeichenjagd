@@ -549,12 +549,12 @@ h3 {
   line-height: 1.15;
 }
 
-.find-city {
+.find-mnemonic {
   font-size: 16px;
   font-weight: 600;
 }
 
-.find-mnemonic {
+.find-city {
   color: var(--ink-dim);
   font-size: 13px;
   font-style: italic;
