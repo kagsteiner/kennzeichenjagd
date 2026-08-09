@@ -440,8 +440,25 @@ h3 {
   z-index: 2;
   display: flex;
   justify-content: center;
+  gap: 8px;
   padding: 8px 14px 0;
   pointer-events: none;
+}
+
+/*
+ * Erscheint erst, wenn der Ausschnitt von Hand verschoben wurde: nur dann ist
+ * der Weg zurück zur eigenen Umgebung überhaupt eine Frage.
+ */
+.recenter-btn {
+  pointer-events: auto;
+  border: 1px solid var(--accent);
+  background: rgba(21, 29, 49, 0.82);
+  backdrop-filter: blur(8px);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
 }
 
 .status-chip {

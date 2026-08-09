@@ -32,6 +32,7 @@ export class DriveScreen {
   private scoreEl: HTMLElement;
   private metaEl: HTMLElement;
   private statusEl: HTMLElement;
+  private recenterEl: HTMLElement;
   private overlay: HTMLElement;
   private sheet: HTMLElement;
   private sheetList: HTMLElement;
@@ -39,13 +40,17 @@ export class DriveScreen {
   private findGeneration = 0;
   private celebrating = false;
   private placeCode: string | null = null;
+  /** Der Ausschnitt wurde von Hand gewählt — dann führt die Karte nicht mehr nach. */
+  private manualView = false;
   private mounted = true;
   private unsubscribe: Array<() => void> = [];
 
   constructor(private onBack: () => void, private onCollection: () => void) {
     this.mapHost = h('div', { class: 'map-host' });
     this.map = new MapView(this.mapHost);
+    this.map.gestures = true;
     this.map.onMarkerClick = (code) => this.showPlaceCard(code);
+    this.map.onUserView = () => this.enterManualView();
     // Daneben getippt: die Ortskarte wieder weg.
     this.mapHost.addEventListener('click', () => this.hidePlaceCard());
 
@@ -90,6 +95,13 @@ export class DriveScreen {
       },
     });
 
+    this.recenterEl = h(
+      'button',
+      { class: 'recenter-btn', title: 'Zurück zur Umgebung', onclick: () => this.recenter() },
+      '◎ Umgebung',
+    );
+    this.recenterEl.hidden = true;
+
     const dock = h(
       'footer',
       { class: 'dock' },
@@ -103,7 +115,7 @@ export class DriveScreen {
       { class: 'screen screen-drive' },
       this.mapHost,
       hud,
-      h('div', { class: 'status-row' }, this.statusEl),
+      h('div', { class: 'status-row' }, this.statusEl, this.recenterEl),
       this.overlay,
       this.sheet,
       dock,
@@ -148,6 +160,34 @@ export class DriveScreen {
     this.refresh();
   }
 
+  /**
+   * Sobald jemand die Karte selbst schiebt oder zoomt, hört das automatische
+   * Nachführen auf — sonst risse es den Ausschnitt bei der nächsten
+   * Standortmeldung wieder weg. Der Knopf holt die Umgebung zurück.
+   */
+  private enterManualView(): void {
+    // Wer mitten im Fund-Moment zur Karte greift, will sie selbst führen:
+    // die Zoomfahrt ist damit beendet, nicht bloß angehalten.
+    if (this.celebrating) this.endCelebration();
+    if (this.manualView) return;
+    this.manualView = true;
+    this.recenterEl.hidden = false;
+  }
+
+  private endCelebration(): void {
+    this.findGeneration++;
+    this.celebrating = false;
+    this.hideFindCard();
+    this.map.clearLink();
+    this.map.highlightMarker('');
+  }
+
+  private recenter(): void {
+    this.manualView = false;
+    this.recenterEl.hidden = true;
+    if (!this.celebrating) void this.map.animateTo(this.localView(), 420);
+  }
+
   /** Karte, Marker und Anzeigen an den aktuellen Stand angleichen. */
   private refresh(): void {
     if (!this.mounted) return;
@@ -161,7 +201,7 @@ export class DriveScreen {
       : 'Noch keine Fahrt';
 
     this.map.setMarkers(this.markers());
-    if (!this.celebrating) this.map.setView(this.localView());
+    if (!this.celebrating && !this.manualView) this.map.setView(this.localView());
     if (!this.sheet.hidden) this.fillSheet();
     if (pos) this.map.setHome(pos, this.ringsKm());
   }
@@ -237,6 +277,11 @@ export class DriveScreen {
   private async celebrate(find: Find, plate: Plate, from: LatLon, achievements: string[]): Promise<void> {
     const generation = ++this.findGeneration;
     const alive = () => this.mounted && generation === this.findGeneration;
+
+    // Ein Fund führt die Karte wieder selbst — ein von Hand gewählter
+    // Ausschnitt gilt danach nicht mehr.
+    this.manualView = false;
+    this.recenterEl.hidden = true;
 
     this.celebrating = true;
     this.map.setMarkers(this.markers());

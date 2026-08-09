@@ -15,6 +15,13 @@ import { STATES } from '../game/plates';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/** Grenzen der Handsteuerung: von der Stadtansicht bis knapp über Deutschland. */
+const MIN_SPAN_KM = 4;
+/** Wie weit der Ausschnitt über den Rand Deutschlands hinauswandern darf. */
+const PAN_MARGIN_KM = 250;
+/** Bis hierhin gilt eine Berührung noch als Tipp, nicht als Geste. */
+const TAP_SLOP = 8;
+
 export interface View {
   center: LatLon;
   spanKm: number;
@@ -47,6 +54,10 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 /** Umschließendes Rechteck aller Bundesländer, in projizierten Kilometern. */
 const GERMANY_BOUNDS = (() => {
   let minX = Infinity;
@@ -71,6 +82,14 @@ const GERMANY_BOUNDS = (() => {
   };
 })();
 
+/** Hält den Mittelpunkt in Reichweite des Landes — sonst schiebt man ins Leere. */
+function clampCenter(p: Point): Point {
+  const c = project(GERMANY_BOUNDS.center);
+  const dx = GERMANY_BOUNDS.widthKm / 2 + PAN_MARGIN_KM;
+  const dy = GERMANY_BOUNDS.heightKm / 2 + PAN_MARGIN_KM;
+  return { x: clamp(p.x, c.x - dx, c.x + dx), y: clamp(p.y, c.y - dy, c.y + dy) };
+}
+
 export class MapView {
   readonly svg: SVGSVGElement;
   private gWorld: SVGGElement;
@@ -86,6 +105,12 @@ export class MapView {
   /** Wird gerufen, wenn auf ein Fähnchen (oder einen Ortspunkt) getippt wird. */
   onMarkerClick: ((code: string) => void) | null = null;
 
+  /** Wird gerufen, sobald der Ausschnitt von Hand verschoben oder gezoomt wird. */
+  onUserView: (() => void) | null = null;
+
+  /** Gesten erlauben — auf der stillen Sammlungskarte bleiben sie aus. */
+  gestures = false;
+
   private view: View = { center: GERMANY_BOUNDS.center, spanKm: 900 };
   private size = { w: 1, h: 1 };
   private placed: PlacedMarker[] = [];
@@ -93,6 +118,11 @@ export class MapView {
   private homePoint: Point | null = null;
   private animation: number | null = null;
   private cancelCurrent: (() => void) | null = null;
+
+  /** Aktive Finger (bzw. Maustaste) einer laufenden Geste. */
+  private pointers = new Map<number, { x: number; y: number }>();
+  private gestureTravel = 0;
+  private swallowClick = false;
 
   constructor(private container: HTMLElement) {
     this.svg = el('svg', { class: 'map', preserveAspectRatio: 'xMidYMid meet' });
@@ -117,6 +147,25 @@ export class MapView {
       ev.stopPropagation();
       this.onMarkerClick?.(code);
     });
+
+    this.svg.addEventListener('wheel', (ev) => this.onWheel(ev), { passive: false });
+    this.svg.addEventListener('pointerdown', (ev) => this.onPointerDown(ev));
+    this.svg.addEventListener('pointermove', (ev) => this.onPointerMove(ev));
+    for (const type of ['pointerup', 'pointercancel'] as const) {
+      this.svg.addEventListener(type, (ev) => this.onPointerUp(ev));
+    }
+    // Nach einer Schiebe- oder Zoomgeste darf der abschließende Klick nicht
+    // mehr als Tipp auf einen Marker durchgehen.
+    this.svg.addEventListener(
+      'click',
+      (ev) => {
+        if (!this.swallowClick) return;
+        this.swallowClick = false;
+        ev.stopPropagation();
+        ev.preventDefault();
+      },
+      true,
+    );
 
     const ro = new ResizeObserver(() => this.measure());
     ro.observe(container);
@@ -155,9 +204,12 @@ export class MapView {
 
   /* ---------- Ansicht ---------- */
 
-  private measure(): void {
-    const rect = this.container.getBoundingClientRect();
-    this.size = { w: Math.max(1, rect.width), h: Math.max(1, rect.height) };
+  private measure(rect: DOMRect = this.container.getBoundingClientRect()): void {
+    // Solange die Karte nicht im Layout hängt, misst sie null. Diesen Wert zu
+    // übernehmen hieße, mit einer 1-Pixel-Karte zu rechnen — die Gesten
+    // verschöben dann pro Pixel hunderte Kilometer.
+    if (rect.width < 1 || rect.height < 1) return;
+    this.size = { w: rect.width, h: rect.height };
     if (this.autoFit) this.view = this.germanyView();
     this.applyView();
   }
@@ -218,6 +270,113 @@ export class MapView {
 
   get currentView(): View {
     return this.view;
+  }
+
+  /** Kilometer je Bildschirmpixel in der aktuellen Ansicht. */
+  private kmPerPx(spanKm = this.view.spanKm): number {
+    const { w, h } = this.size;
+    return (w >= h ? spanKm : spanKm * (w / h)) / w;
+  }
+
+  /* ---------- Gesten: schieben und zoomen ---------- */
+
+  private onPointerDown(ev: PointerEvent): void {
+    if (!this.gestures) return;
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    // Der Finger darf den Marker verlassen, ohne dass die Geste abreißt.
+    try {
+      this.svg.setPointerCapture(ev.pointerId);
+    } catch {
+      /* Zeiger schon wieder weg — dann eben ohne Capture. */
+    }
+    this.pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (this.pointers.size === 1) this.gestureTravel = 0;
+  }
+
+  /**
+   * Ein Finger schiebt, zwei Finger zoomen. Beides fällt in dieselbe Rechnung:
+   * der Punkt unter dem Mittelpunkt der Finger bleibt liegen, während sich
+   * Maßstab und Mittelpunkt an den neuen Fingerabstand angleichen.
+   */
+  private onPointerMove(ev: PointerEvent): void {
+    const previous = this.pointers.get(ev.pointerId);
+    if (!previous) return;
+    const before = this.gestureFrame();
+    this.pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const after = this.gestureFrame();
+    if (!before || !after) return;
+
+    this.gestureTravel += Math.hypot(ev.clientX - previous.x, ev.clientY - previous.y);
+    if (this.gestureTravel > TAP_SLOP) this.swallowClick = true;
+
+    const spanKm =
+      before.spread > 0 && after.spread > 0
+        ? this.view.spanKm * (before.spread / after.spread)
+        : this.view.spanKm;
+    this.reframe(before, after, spanKm);
+  }
+
+  /** Zoomen mit dem Mausrad — dieselbe Rechnung, der Zeiger ist der Anker. */
+  private onWheel(ev: WheelEvent): void {
+    if (!this.gestures) return;
+    ev.preventDefault();
+    const point = { x: ev.clientX, y: ev.clientY };
+    this.reframe(point, point, this.view.spanKm * Math.exp(ev.deltaY * 0.0015));
+  }
+
+  /**
+   * Setzt die Ansicht so, dass der Weltpunkt unter `from` anschließend unter
+   * `to` liegt — bei gleichzeitig neuem Maßstab. Daraus ergeben sich Schieben
+   * (gleicher Maßstab), Pinch-Zoom und Radzoom (gleicher Punkt).
+   */
+  private reframe(from: { x: number; y: number }, to: { x: number; y: number }, spanKm: number): void {
+    // Eine laufende Zoomfahrt gibt die Karte hier ab — aber erst jetzt, wenn
+    // wirklich bewegt wird, nicht schon beim bloßen Aufsetzen des Fingers.
+    this.stopAnimation();
+    // Die Geste rechnet in Bildschirmpixeln und braucht deshalb ein aktuelles
+    // Maß der Karte, auch wenn der ResizeObserver noch nicht zum Zug kam.
+    const rect = this.container.getBoundingClientRect();
+    this.measure(rect);
+    const offset = (p: { x: number; y: number }, km: number) => ({
+      x: (p.x - rect.left - rect.width / 2) * km,
+      y: (p.y - rect.top - rect.height / 2) * km,
+    });
+
+    const kmPerPx = this.kmPerPx();
+    const center = project(this.view.center);
+    const before = offset(from, kmPerPx);
+    const anchor = { x: center.x + before.x, y: center.y + before.y };
+
+    const span = clamp(spanKm, MIN_SPAN_KM, this.maxSpanKm());
+    const after = offset(to, this.kmPerPx(span));
+
+    this.view = {
+      center: unproject(clampCenter({ x: anchor.x - after.x, y: anchor.y - after.y })),
+      spanKm: span,
+    };
+    this.applyView();
+    this.onUserView?.();
+  }
+
+  private onPointerUp(ev: PointerEvent): void {
+    this.pointers.delete(ev.pointerId);
+    if (this.svg.hasPointerCapture(ev.pointerId)) this.svg.releasePointerCapture(ev.pointerId);
+  }
+
+  /** Mittelpunkt und Spannweite der aktiven Finger, in Bildschirmpixeln. */
+  private gestureFrame(): { x: number; y: number; spread: number } | null {
+    const points = [...this.pointers.values()];
+    if (points.length === 0) return null;
+    const x = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+    const y = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+    const spread =
+      points.length < 2 ? 0 : Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    return { x, y, spread };
+  }
+
+  /** Weiter als ganz Deutschland mit etwas Luft lohnt das Herauszoomen nicht. */
+  private maxSpanKm(): number {
+    return this.germanyView().spanKm * 1.15;
   }
 
   /** Bricht eine laufende Zoomfahrt ab. Das angehaltene Bild bleibt stehen. */
