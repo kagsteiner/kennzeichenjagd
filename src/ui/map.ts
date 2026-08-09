@@ -83,6 +83,9 @@ export class MapView {
   /** Hält die Ansicht auf der Gesamtkarte, auch wenn sich die Fenstergröße ändert. */
   autoFit = false;
 
+  /** Wird gerufen, wenn auf ein Fähnchen (oder einen Ortspunkt) getippt wird. */
+  onMarkerClick: ((code: string) => void) | null = null;
+
   private view: View = { center: GERMANY_BOUNDS.center, spanKm: 900 };
   private size = { w: 1, h: 1 };
   private placed: PlacedMarker[] = [];
@@ -104,6 +107,16 @@ export class MapView {
     container.append(this.svg);
 
     this.drawStates();
+
+    // Tippen auf einen Marker: die Trefferfläche liegt im Marker selbst, der
+    // Rest der Karte bleibt für Gesten frei.
+    this.gMarkers.addEventListener('click', (ev) => {
+      const marker = (ev.target as Element | null)?.closest<SVGGElement>('.marker');
+      const code = marker?.dataset.code;
+      if (!code) return;
+      ev.stopPropagation();
+      this.onMarkerClick?.(code);
+    });
 
     const ro = new ResizeObserver(() => this.measure());
     ro.observe(container);
@@ -282,6 +295,13 @@ export class MapView {
       });
       label.textContent = m.code;
       g.append(label);
+      // Unsichtbare Trefferfläche — sie skaliert mit dem Marker und ist damit
+      // auf jeder Zoomstufe gleich groß (gut mit dem Daumen zu treffen).
+      g.append(
+        m.kind === 'hint'
+          ? el('circle', { r: 11, class: 'marker-hit' })
+          : el('rect', { x: -11, y: -22, width: 33, height: 30, class: 'marker-hit' }),
+      );
       this.gMarkers.append(g);
       this.placed.push({ el: g, p: project(m) });
     }

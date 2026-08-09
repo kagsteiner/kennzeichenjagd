@@ -263,6 +263,13 @@ h3 {
   pointer-events: none;
 }
 
+/* Trefferfläche zum Antippen — unsichtbar, aber daumengroß. */
+.marker-hit {
+  fill: transparent;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 .marker .foot {
   fill: var(--accent);
 }
@@ -499,6 +506,11 @@ h3 {
   pointer-events: none;
 }
 
+/* Die Ortskarte darf angetippt werden, ohne dass sie sich gleich schließt. */
+.find-overlay.is-interactive .find-card {
+  pointer-events: auto;
+}
+
 .find-overlay.at-top {
   place-items: start center;
   padding-bottom: 0;
@@ -538,6 +550,11 @@ h3 {
   text-transform: uppercase;
 }
 
+.find-new.found {
+  background: var(--ink-dim);
+  color: #06251d;
+}
+
 .find-code {
   font-size: 38px;
   font-weight: 800;
@@ -574,6 +591,15 @@ h3 {
 }
 
 .tier-nah .find-points {
+  color: var(--ink);
+}
+
+/*
+ * Ortskarte: an der Stelle der Punktzahl steht die Entfernung. Sie ist eine
+ * Auskunft, keine Belohnung — deshalb ruhig und ohne Tier-Farbe.
+ */
+.find-card.place-card .find-points {
+  font-size: 26px;
   color: var(--ink);
 }
 

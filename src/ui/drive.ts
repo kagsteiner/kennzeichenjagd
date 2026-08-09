@@ -1,8 +1,9 @@
 /**
  * Der Fahrt-Bildschirm: Umgebungskarte, Punktestand, Eingabe.
  *
- * Die Karte ist ständig sichtbar. Wer irgendwo hintippt, bekommt die
- * Kennzeichen-Tastatur; mit dem letzten Buchstaben verschwindet sie wieder.
+ * Die Karte ist ständig sichtbar. Die Kennzeichen-Tastatur kommt nur über den
+ * Knopf im Dock; ein Tipp auf ein Fähnchen zeigt stattdessen dessen Karte mit
+ * der Entfernung.
  */
 
 import { distanceKm, compass, type LatLon } from '../game/geo';
@@ -37,15 +38,16 @@ export class DriveScreen {
 
   private findGeneration = 0;
   private celebrating = false;
+  private placeCode: string | null = null;
   private mounted = true;
   private unsubscribe: Array<() => void> = [];
 
   constructor(private onBack: () => void, private onCollection: () => void) {
     this.mapHost = h('div', { class: 'map-host' });
     this.map = new MapView(this.mapHost);
-    this.mapHost.addEventListener('click', () => {
-      if (!this.keyboard.isOpen) this.keyboard.show();
-    });
+    this.map.onMarkerClick = (code) => this.showPlaceCard(code);
+    // Daneben getippt: die Ortskarte wieder weg.
+    this.mapHost.addEventListener('click', () => this.hidePlaceCard());
 
     this.scoreEl = h('strong', { class: 'score-value' }, '0');
     this.metaEl = h('div', { class: 'hud-meta' }, '');
@@ -82,7 +84,10 @@ export class DriveScreen {
 
     this.keyboard = new PlateKeyboard({
       onSubmit: (code) => void this.registerFind(code),
-      onOpenChange: (open) => this.root.classList.toggle('keyboard-open', open),
+      onOpenChange: (open) => {
+        this.root.classList.toggle('keyboard-open', open);
+        if (open) this.hidePlaceCard();
+      },
     });
 
     const dock = h(
@@ -257,7 +262,62 @@ export class DriveScreen {
     }
   }
 
+  /* ---------- Ortskarte (Tipp auf ein Fähnchen) ---------- */
+
+  /**
+   * Zeigt zu einem angetippten Marker dieselbe Karte wie beim Fund — nur steht
+   * statt der Punktzahl die Entfernung, denn hier ist nichts zu gewinnen.
+   */
+  private showPlaceCard(code: string): void {
+    if (this.celebrating) return;
+    if (this.placeCode === code) {
+      this.hidePlaceCard();
+      return;
+    }
+    const plate = plateByCode(code);
+    if (!plate) return;
+
+    const pos = location.current.position;
+    const km = pos ? distanceKm(pos, plate) : null;
+    const direction = pos ? compass(pos, plate) : '';
+    const known = store.state.trip?.finds.some((f) => f.code === code) ?? false;
+
+    const card = h(
+      'div',
+      {
+        class: `find-card place-card${km === null ? '' : ` tier-${findTier(km)}`}`,
+        onclick: (ev: Event) => ev.stopPropagation(),
+      },
+      known ? h('div', { class: 'find-new found' }, 'Schon gefunden') : null,
+      h('div', { class: 'find-code' }, plate.code),
+      h('div', { class: 'find-mnemonic' }, plate.mnemonic),
+      h('div', { class: 'find-city' }, plate.city),
+      h(
+        'div',
+        { class: 'find-distance' },
+        km === null ? 'Ohne Standort keine Entfernung' : direction ? `Richtung ${direction}` : 'ganz in der Nähe',
+      ),
+      km === null ? null : h('div', { class: 'find-points' }, formatKm(km)),
+    );
+
+    this.overlay.classList.remove('at-top');
+    this.overlay.classList.add('is-interactive');
+    this.overlay.replaceChildren(card);
+    this.placeCode = code;
+    requestAnimationFrame(() => card.classList.add('is-in'));
+  }
+
+  private hidePlaceCard(): void {
+    if (!this.placeCode) return;
+    this.placeCode = null;
+    this.overlay.classList.remove('is-interactive');
+    this.hideFindCard();
+  }
+
   private showFindCard(find: Find, plate: Plate, from: LatLon): void {
+    this.placeCode = null;
+    this.overlay.classList.remove('is-interactive');
+
     const card = h(
       'div',
       { class: `find-card tier-${findTier(find.km)}` },
@@ -288,6 +348,7 @@ export class DriveScreen {
     this.sheet.hidden = !open;
     if (open) {
       this.keyboard.hide();
+      this.hidePlaceCard();
       this.fillSheet();
       requestAnimationFrame(() => this.sheet.classList.add('is-open'));
     } else {
