@@ -32,6 +32,11 @@ export function formatKm(km: number): string {
   return `${Math.round(km)} km`;
 }
 
+/** "2.340" — Tausenderpunkte, damit große Zahlen auf einen Blick lesbar sind. */
+export function formatNumber(n: number): string {
+  return Math.round(n).toLocaleString('de-DE');
+}
+
 export function formatClock(ts: number): string {
   return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }

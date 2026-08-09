@@ -25,6 +25,8 @@ export interface Trip {
   id: string;
   startedAt: number;
   finds: Find[];
+  /** Nur bei ausdrücklich beendeten Fahrten gesetzt (siehe `endTrip`). */
+  endedAt?: number;
 }
 
 export interface TripSummary {
@@ -114,18 +116,26 @@ class Store {
 
   /* ---------- Fahrt ---------- */
 
+  /**
+   * Schreibt eine Fahrt in die Historie. Fahrten ohne Fund sind nichts wert
+   * und werden stillschweigend verworfen.
+   */
+  private archive(trip: Trip, endedAt: number): void {
+    if (!trip.finds.length) return;
+    this.data.history.unshift({
+      id: trip.id,
+      startedAt: trip.startedAt,
+      endedAt,
+      points: tripPoints(trip),
+      finds: trip.finds.length,
+    });
+    this.data.history = this.data.history.slice(0, 50);
+  }
+
   startTrip(): Trip {
     const old = this.data.trip;
-    if (old && old.finds.length) {
-      this.data.history.unshift({
-        id: old.id,
-        startedAt: old.startedAt,
-        endedAt: old.finds[old.finds.length - 1].at,
-        points: tripPoints(old),
-        finds: old.finds.length,
-      });
-      this.data.history = this.data.history.slice(0, 50);
-    }
+    // Ohne ausdrückliches Beenden endet die alte Fahrt mit ihrem letzten Fund.
+    if (old) this.archive(old, old.finds[old.finds.length - 1]?.at ?? old.startedAt);
     this.data.trip = {
       id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
       startedAt: Date.now(),
@@ -133,6 +143,20 @@ class Store {
     };
     this.commit();
     return this.data.trip;
+  }
+
+  /**
+   * Beendet die laufende Fahrt und gibt sie samt Endzeitpunkt zurück — die
+   * Auswertung zeigt sie danach noch einmal, gespeichert ist nur die Historie.
+   */
+  endTrip(): Trip | null {
+    const trip = this.data.trip;
+    if (!trip) return null;
+    const ended: Trip = { ...trip, endedAt: Date.now() };
+    this.archive(trip, ended.endedAt!);
+    this.data.trip = null;
+    this.commit();
+    return ended;
   }
 
   /** Registriert einen Fund. Gibt `null` zurück, wenn er in dieser Fahrt schon zählt. */
@@ -173,6 +197,12 @@ class Store {
 
 export function tripPoints(trip: Trip | null): number {
   return trip ? trip.finds.reduce((sum, f) => sum + f.points, 0) : 0;
+}
+
+/** Fahrzeit: bis zum Ende, bei laufender Fahrt bis jetzt. */
+export function tripDurationMs(trip: Trip | null): number {
+  if (!trip) return 0;
+  return Math.max(0, (trip.endedAt ?? Date.now()) - trip.startedAt);
 }
 
 export const store = new Store();

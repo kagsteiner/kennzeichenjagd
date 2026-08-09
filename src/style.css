@@ -1054,6 +1054,116 @@ h3 {
   color: var(--ink);
 }
 
+/* ---------- Auswertung einer beendeten Fahrt ---------- */
+
+/*
+ * Die Punkte je Stunde stehen groß und allein oben — sie sind das Ergebnis
+ * der Fahrt. Punktzahl, Funde und Fahrzeit erklären sie nur.
+ */
+.rate-card {
+  padding: 20px 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(600px 220px at 50% 0%, #24325a 0%, transparent 70%),
+    var(--panel);
+  text-align: center;
+}
+
+.rate-icon {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.rate-value {
+  margin-top: 6px;
+}
+
+.rate-value strong {
+  display: block;
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-unit {
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.rate-label {
+  margin: 8px 0 12px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.rate-card .progress-note {
+  text-align: center;
+}
+
+.rate-fine {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.summary-highlights p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.summary-highlights strong {
+  color: var(--ink);
+}
+
+.find-row-code {
+  min-width: 3.2em;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.find-row-text {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.find-row-km {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Die Fahrzeit ist die längste der drei Kacheln — sie darf nicht umbrechen. */
+.screen-summary .stat strong {
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.screen-summary .map-host-static {
+  height: min(40vh, 320px);
+}
+
+.find-row.tier-weit strong {
+  color: var(--far);
+}
+
+.find-row.tier-nah strong {
+  color: var(--ink-dim);
+}
+
+.summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 /* ---------- Einstellungen ---------- */
 
 .modal-backdrop {
