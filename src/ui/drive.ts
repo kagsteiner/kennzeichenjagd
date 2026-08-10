@@ -255,7 +255,7 @@ export class DriveScreen {
 
     const trip = store.state.trip ?? store.startTrip();
     if (trip.finds.some((f) => f.code === code)) {
-      toast(`${code} zählt in dieser Fahrt schon.`);
+      toast(`${plate.city} wurde in dieser Fahrt schon gefunden.`);
       return;
     }
 
