@@ -41,6 +41,9 @@ async function resolveFile(urlPath) {
 createServer(async (req, res) => {
   try {
     const path = await resolveFile(req.url.split('?')[0] ?? '/');
+    // index.html-Aufrufe sind die einzige Näherung an "App-Start", die ein
+    // Static-Server sehen kann — Folge-Requests für JS/CSS/Bilder loggen wir nicht.
+    if (path.endsWith('index.html')) console.log(`[start] ${new Date().toISOString()}`);
     const body = await readFile(path);
     res.writeHead(200, { 'Content-Type': MIME[extname(path)] ?? 'application/octet-stream' });
     res.end(body);
