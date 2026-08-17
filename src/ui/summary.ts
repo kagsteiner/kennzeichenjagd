@@ -169,6 +169,12 @@ export function createSummaryScreen(trip: Trip, onHome: () => void): { root: HTM
     map.autoFit = true;
     map.gestures = true;
     map.onMarkerClick = (code) => showMapCard(code);
+    // Sobald von Hand gezoomt oder geschoben wird, darf ein Resize (auf dem
+    // Handy etwa durch die ein-/ausklappende Adressleiste beim Scrollen)
+    // die Geste nicht mehr mit einem Rücksprung auf die Gesamtansicht stören.
+    map.onUserView = () => {
+      if (map) map.autoFit = false;
+    };
     mapHost.addEventListener('click', () => hideMapCard());
     map.setMarkers(markers);
     map.setView(map.germanyView());
