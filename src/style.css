@@ -53,6 +53,9 @@ button {
   font: inherit;
   color: inherit;
   cursor: pointer;
+  /* Sonst wertet iOS schnell aufeinanderfolgende Taps (z. B. beim zügigen
+     Eintippen eines Kennzeichens) mitunter als Doppeltipp und zoomt hinein. */
+  touch-action: manipulation;
 }
 
 h1,
@@ -219,6 +222,11 @@ h3 {
   inset: 0;
   background:
     radial-gradient(900px 500px at 50% 25%, #16203a 0%, var(--bg) 70%);
+}
+
+.map-wrap {
+  position: relative;
+  flex: none;
 }
 
 .map-host-static {

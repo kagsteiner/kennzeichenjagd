@@ -32,10 +32,46 @@ export function createSummaryScreen(trip: Trip, onHome: () => void): { root: HTM
   const firstEver = trip.finds.filter((f) => f.firstEver).length;
 
   const mapHost = h('div', { class: 'map-host map-host-static' });
+  const mapOverlay = h('div', { class: 'find-overlay', 'aria-live': 'polite' });
+  const mapWrap = h('div', { class: 'map-wrap' }, mapHost, mapOverlay);
   const markers: Marker[] = trip.finds
     .map((f) => plateByCode(f.code))
     .filter((p): p is Plate => Boolean(p))
     .map((p) => ({ code: p.code, lat: p.lat, lon: p.lon, kind: 'trip' as const }));
+
+  /** Tipp auf ein Fähnchen: dieselbe Fund-Karte wie live während der Fahrt. */
+  let cardCode: string | null = null;
+  const hideMapCard = (): void => {
+    if (!cardCode) return;
+    cardCode = null;
+    mapOverlay.classList.remove('is-interactive');
+    const card = mapOverlay.firstElementChild;
+    if (!card) return;
+    card.classList.remove('is-in');
+    setTimeout(() => card.remove(), 320);
+  };
+  const showMapCard = (code: string): void => {
+    if (cardCode === code) return hideMapCard();
+    const plate = plateByCode(code);
+    const find = trip.finds.find((f) => f.code === code);
+    if (!plate || !find) return;
+
+    const card = h(
+      'div',
+      { class: `find-card tier-${findTier(find.km)}`, onclick: (ev: Event) => ev.stopPropagation() },
+      find.firstEver ? h('div', { class: 'find-new' }, 'Neu entdeckt!') : null,
+      h('div', { class: 'find-code' }, plate.code),
+      h('div', { class: 'find-mnemonic' }, plate.mnemonic),
+      h('div', { class: 'find-city' }, plate.city),
+      h('div', { class: 'find-distance' }, formatKm(find.km)),
+      h('div', { class: 'find-points' }, `+${find.points}`),
+    );
+
+    mapOverlay.classList.add('is-interactive');
+    mapOverlay.replaceChildren(card);
+    cardCode = code;
+    requestAnimationFrame(() => card.classList.add('is-in'));
+  };
 
   /* Fortschritt innerhalb der aktuellen Stufe — ganz oben ist der Balken voll. */
   const span = next ? next.min - tier.min : 1;
@@ -115,7 +151,7 @@ export function createSummaryScreen(trip: Trip, onHome: () => void): { root: HTM
         ? rateCard
         : h('p', { class: 'block-note' }, 'Diese Fahrt blieb ohne Fund — sie zählt nicht in der Historie.'),
       stats,
-      trip.finds.length ? mapHost : null,
+      trip.finds.length ? mapWrap : null,
       highlights,
       trip.finds.length ? findList(finds) : null,
       h(
@@ -131,6 +167,9 @@ export function createSummaryScreen(trip: Trip, onHome: () => void): { root: HTM
   if (trip.finds.length) {
     map = new MapView(mapHost);
     map.autoFit = true;
+    map.gestures = true;
+    map.onMarkerClick = (code) => showMapCard(code);
+    mapHost.addEventListener('click', () => hideMapCard());
     map.setMarkers(markers);
     map.setView(map.germanyView());
   }
